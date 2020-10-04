@@ -1,5 +1,7 @@
-﻿using AE.CoreUtility;
+﻿using AE.CoreInterface;
+using AE.CoreUtility;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Xunit;
@@ -352,6 +354,122 @@ namespace ChallengeTest
             ix = 0;
             foreach (var pair in BlobIO.ToBlobList(bio))
                 Assert.Equal(--ix, pair.Key);
+        }
+
+        [Fact]
+        public void PermissionSetNull()
+        {
+            var permissionSet = new PermissionSet((ISet<string>)null);
+            Assert.Empty(permissionSet.Permissions);
+            Assert.Empty(permissionSet.PermissionsAsByteArray);
+
+            permissionSet = new PermissionSet((byte[])null);
+            Assert.Empty(permissionSet.Permissions);
+            Assert.Empty(permissionSet.PermissionsAsByteArray);
+        }
+
+        [Fact]
+        public void PermissionSetEmpty()
+        {
+            var permissionSet = new PermissionSet(new HashSet<string>());
+            Assert.Empty(permissionSet.Permissions);
+            Assert.Empty(permissionSet.PermissionsAsByteArray);
+
+            permissionSet = new PermissionSet(new byte[0]);
+            Assert.Empty(permissionSet.Permissions);
+            Assert.Empty(permissionSet.PermissionsAsByteArray);
+        }
+
+        [Fact]
+        public void PermissionSetInvalidPermission()
+        {
+            var invalidPermission = "FooBar";
+            Assert.Throws<ArgumentException>(() => new PermissionSet(new HashSet<string> { invalidPermission }));
+            Assert.Throws<ArgumentException>(() => new PermissionSet(Encoding.UTF8.GetBytes(invalidPermission)));
+
+            var b = new byte[10];
+            new Random().NextBytes(b);
+            Assert.Throws<ArgumentException>(() => new PermissionSet(b));
+        }
+
+        [Fact]
+        public void PermissionSetValidPermissions()
+        {
+            var validPermission = "perm1";
+            var validPermission2 = "perm100";
+
+            var permissionSet = new PermissionSet(new HashSet<string> { validPermission });
+            Assert.Equal(validPermission, permissionSet.Permissions.Single());
+
+            permissionSet = new PermissionSet(new HashSet<string> { validPermission, validPermission2 });
+            Assert.Contains(validPermission, permissionSet.Permissions);
+            Assert.Contains(validPermission2, permissionSet.Permissions);
+            Assert.Equal(2, permissionSet.Permissions.Count);
+
+            permissionSet = new PermissionSet(new HashSet<string> { validPermission, validPermission2, validPermission });
+            Assert.Contains(validPermission, permissionSet.Permissions);
+            Assert.Contains(validPermission2, permissionSet.Permissions);
+            Assert.Equal(2, permissionSet.Permissions.Count);
+
+            permissionSet = new PermissionSet(Encoding.UTF8.GetBytes(validPermission));
+            Assert.Equal(validPermission, permissionSet.Permissions.Single());
+
+            permissionSet = new PermissionSet(Encoding.UTF8.GetBytes(validPermission + ";" + validPermission2));
+            Assert.Contains(validPermission, permissionSet.Permissions);
+            Assert.Contains(validPermission2, permissionSet.Permissions);
+            Assert.Equal(2, permissionSet.Permissions.Count);
+
+            permissionSet = new PermissionSet(Encoding.UTF8.GetBytes(validPermission + ";" + validPermission2 + ";" + validPermission));
+            Assert.Contains(validPermission, permissionSet.Permissions);
+            Assert.Contains(validPermission2, permissionSet.Permissions);
+            Assert.Equal(2, permissionSet.Permissions.Count);
+        }
+
+        [Fact]
+        public void BlobIOWithPermissionSet()
+        {
+            string[] map = new string[] { "PermissionSet" };
+            object[] val = new object[] { new PermissionSet(new HashSet<string> { "perm1" }) };
+            BlobIO b = new BlobIO(map, val);
+
+            Assert.Equal(b.Get<PermissionSet>(0).Permissions.Single(), "perm1");
+            b.Set(0, new PermissionSet(new HashSet<string> { "perm2" }));
+            Assert.Equal(b.Get<PermissionSet>(0).Permissions.Single(), "perm2");
+            b.Clear(0);
+            Assert.Equal(b.Get<PermissionSet>(0), null);
+
+            b = new BlobIO(map, val);
+            byte[] bio = BlobIO.ExportBlobList(b);
+            b = new BlobIO(bio);
+            Assert.Equal(b.Get<PermissionSet>(0).Permissions.Single(), "perm1");
+            b.Set(0, new PermissionSet(new HashSet<string> { "perm2" }));
+            Assert.Equal(b.Get<PermissionSet>(0).Permissions.Single(), "perm2");
+            b.Clear(0);
+            Assert.Equal(b.Get<PermissionSet>(0), null);
+        }
+
+        [Fact]
+        public void UserBlob()
+        {
+            var user = new User();
+            var blob = user.Serialize();
+            Assert.Equal(blob.Get<string>(0), null);
+
+            user = new User
+            {
+                UserName = "foo",
+                Permissions = new PermissionSet(new HashSet<string> { "perm1" }),
+                CreateDate = new DateTime(2020, 01, 01),
+                Timezone = "PST",
+                FavoriteColor = "blue"
+
+            };
+            blob = user.Serialize();
+            Assert.Equal(blob.Get<string>(0), "foo");
+            Assert.Equal(blob.Get<PermissionSet>(1).Permissions.Single(), "perm1");
+            Assert.Equal(blob.GetDateTime(2)?.Ticks, new DateTime(2020, 01, 01).Ticks);
+            Assert.Equal(blob.Get<string>(3), "PST");
+            Assert.Equal(blob.Get<string>(4), "blue");
         }
     }
 }

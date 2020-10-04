@@ -395,7 +395,7 @@ namespace AE.CoreUtility
             if (sz == int.MaxValue) return null;
             if (ix + sz > buf.Length) throw new IOExException("Invalid string length");
             if (sz <= 0) return String.Empty;
-            string ret = Encoding.ASCII.GetString(buf, ix, sz);
+            string ret = Encoding.UTF8.GetString(buf, ix, sz);
             ix += sz;
             return ret;
         }
@@ -687,6 +687,13 @@ namespace AE.CoreUtility
                             }
                         }
                     case TypeCode.Object:
+
+                        if (io.GetType() == typeof(PermissionSet))
+                        {
+                            byte[] barr = ((PermissionSet)io).PermissionsAsByteArray; 
+                            return BinaryEx.GetBytes(barr.Length).Swap(swap).Concat(barr).ToArray();
+                        }
+
                         switch (typ) {
                             case TypeCodeEx.ByteArray: if (io == null) break; byte[] barr = (byte[])io; return BinaryEx.GetBytes(barr.Length).Swap(swap).Concat(barr).ToArray();
                             case TypeCodeEx.ShortArray: if (io == null) break; short[] isarr = (short[])io; return BinaryEx.GetBytes(isarr.Length).Swap(swap).Concat(isarr.SelectMany(z => BinaryEx.GetBytes(z).Swap(swap))).ToArray();

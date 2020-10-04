@@ -46,7 +46,8 @@ namespace AE.CoreUtility
             Date = 31,
             Time = 32,
             DateTime2 = 33,
-            DateTimeOffset = 34
+            DateTimeOffset = 34,
+            PermissionSet = 35,
         }
 #endif // !NETSTANDARD && !SQLCLRDLL
         public readonly static BlobIO Empty = new BlobIO();
@@ -72,6 +73,7 @@ namespace AE.CoreUtility
         public static BlobIO operator +(BlobIO b, double v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
         public static BlobIO operator +(BlobIO b, decimal v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
         public static BlobIO operator +(BlobIO b, Guid v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
+        public static BlobIO operator +(BlobIO b, PermissionSet v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
         public static BlobIO operator +(BlobIO b, DateTime v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
         public static BlobIO operator +(BlobIO b, TimeSpan v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
         public static BlobIO operator +(BlobIO b, string v) { return (b ?? (b = new BlobIO())).Concat(v) ? b : null; }
@@ -603,6 +605,7 @@ namespace AE.CoreUtility
                                 case SQLDBT.VarBinary:
                                 case SQLDBT.Image:
                                 case SQLDBT.Binary: _Data[i] = IOEx.GetBuffer(io, ref ix, swap); break;
+                                case SQLDBT.PermissionSet: _Data[i] = new PermissionSet(IOEx.GetBuffer(io, ref ix, swap)); break;
                             }
                             if (debug != null) debug.AppendLine($"{ix} {t}: {_Data[i]?.ToString() ?? NULL}");
                         }
@@ -728,6 +731,7 @@ namespace AE.CoreUtility
                 case SQLDBT.Structured:
                 case SQLDBT.VarBinary:
                 case SQLDBT.Image:
+                case SQLDBT.PermissionSet:
                 case SQLDBT.Binary: byte[] blob = v as byte[]; return blob == null ? NULL : blob.ToServerHex() ?? NULL;
             }
         }
@@ -763,6 +767,7 @@ namespace AE.CoreUtility
                 case SQLDBT.Structured:
                 case SQLDBT.VarBinary:
                 case SQLDBT.Image:
+                case SQLDBT.PermissionSet:
                 case SQLDBT.Binary: return $"{(set ? "Set" : "Get")}Bytes";
                 default: return null;
             }
@@ -799,6 +804,7 @@ namespace AE.CoreUtility
                 case SQLDBT.VarChar:
                 case SQLDBT.NVarChar:
                 case SQLDBT.VarBinary:
+                case SQLDBT.PermissionSet:
                 case SQLDBT.Binary: return $"{t.ToString().ToLower()}(max){(nullok ? string.Empty : " NOT NULL")}";
                 default: return null;
             }
@@ -960,6 +966,7 @@ namespace AE.CoreUtility
                 case SQLDBT.VarBinary:
                 case SQLDBT.Image:
                 case SQLDBT.Binary: return GetBytes(ix);
+                case SQLDBT.PermissionSet: return GetPermissionSet(ix);
                 default: object ret; return Get<object>(ix, out ret) ? ret : null;
             }
         }
@@ -979,6 +986,12 @@ namespace AE.CoreUtility
         public bool Ensure<T>(int ix, T? v) where T : struct { return _Ensure(ix, !v.HasValue, v); }
 
         public static bool CanIO(ref object obj, out SQLDBT dbt, Type def = null) {
+
+            if (obj != null && obj.GetType() == typeof(PermissionSet))
+            {
+                dbt = SQLDBT.PermissionSet; return true;
+            }
+
             IOEx.TypeCodeEx t = IOEx.TypeCodeEx.Nullable;
             switch (obj != null ? IOEx.GetTypeCode(ref obj, out t) : def != null ? IOEx.GetTypeCode(def) : TypeCode.Empty) {
                 case TypeCode.Empty: dbt = SQLDBT.Variant; return false;
@@ -1126,6 +1139,8 @@ namespace AE.CoreUtility
                     IOEx.TypeCodeEx typ;
                     _Data[ix] = v as byte[] ?? IOEx.ExportOne(v, out code, out typ, false);
                     return yisnull == (_Data[ix] == null);
+                case SQLDBT.PermissionSet: _Data[ix] = v;  return yisnull == (_Data[ix] == null);
+
                 default: return false;
             }
         }
@@ -1155,6 +1170,7 @@ namespace AE.CoreUtility
         public TimeSpan? GetTime(int ix, bool convert = false) { TimeSpan ret; return Get(ix, out ret, convert) ? ret : (TimeSpan?)null; }
         public string GetString(int ix, bool convert = false) { string ret; return Get(ix, out ret, convert) ? ret : null; }
         public byte[] GetBytes(int ix, bool convert = false) { byte[] ret; return Get(ix, out ret, convert) ? ret : null; }
+        public PermissionSet GetPermissionSet(int ix, bool convert = false) { PermissionSet ret; return Get(ix, out ret, convert) ? ret : null; }
 
         /// <summary>
         /// Troubleshoot serialized blob import by returning detected elements and indexes as the serialized bytes are imported
